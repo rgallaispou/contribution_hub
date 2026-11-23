@@ -8,12 +8,12 @@ from backend.app import lore
 
 class LoreSearchTests(unittest.TestCase):
     def test_extracts_thread_message_ids_and_subjects(self):
-        parser = lore.SearchResults("/all")
+        parser = lore.SearchResults("https://lore.kernel.org/all/")
         parser.feed(
-            '<a href="/all/patch%40example.org/">'
+            '<a href="patch%40example.org/">'
             "[PATCH v2] demo: update &amp; verify</a>"
-            '<a href="/all/reply%40example.org/T/#t">Re: follow-up</a>'
-            '<a href="/all/not-a-thread/">ignore this</a>'
+            '<a href="reply%40example.org/T/#t">Re: follow-up</a>'
+            '<a href="_/text/help/">ignore this</a>'
         )
 
         self.assertEqual(
@@ -24,7 +24,7 @@ class LoreSearchTests(unittest.TestCase):
             },
         )
 
-    @patch.object(lore, "_request", return_value=b'<a href="/all/id%40example.org/T/#t">Patch</a>')
+    @patch.object(lore, "_request", return_value=b'<a href="id%40example.org/">Patch</a>')
     def test_search_encodes_identity_query(self, request):
         results = lore.search_threads("https://lore.kernel.org/all/", "f", "dev+kernel@example.org")
 

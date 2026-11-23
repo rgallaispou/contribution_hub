@@ -20,9 +20,10 @@ class LoreSyncError(Exception):
 
 
 class SearchResults(HTMLParser):
-    def __init__(self, archive_path: str):
+    def __init__(self, archive_url: str):
         super().__init__()
-        self.archive_path = archive_path.rstrip("/")
+        self.archive_url = archive_url.rstrip("/") + "/"
+        self.archive_path = urlparse(self.archive_url).path.rstrip("/")
         self.results: dict[str, str] = {}
         self._active_message_id: str | None = None
         self._active_text: list[str] = []
@@ -33,7 +34,7 @@ class SearchResults(HTMLParser):
         href = dict(attrs).get("href")
         if not href:
             return
-        path = unquote(urlparse(href).path)
+        path = unquote(urlparse(urljoin(self.archive_url, href)).path)
         if not path.startswith(self.archive_path + "/"):
             return
         parts = path[len(self.archive_path) + 1:].strip("/").split("/")
@@ -82,7 +83,7 @@ def search_threads(base_url: str, field: str, email: str, offset: int = 0) -> li
     body = _request(url).decode("utf-8", errors="replace")
     if "Making sure you" in body or "Anubis" in body:
         raise LoreSyncError("Lore returned an anti-bot challenge instead of search results")
-    parser = SearchResults(archive_path)
+    parser = SearchResults(archive_url)
     parser.feed(body)
     return list(parser.results.items())
 
