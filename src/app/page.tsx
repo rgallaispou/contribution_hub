@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [syncingLore, setSyncingLore] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<number | null>(null);
   const [toast, setToast] = useState("");
 
@@ -150,6 +151,25 @@ export default function Dashboard() {
     }
   }
 
+  async function syncLore() {
+    setSyncingLore(true);
+    try {
+      const response = await fetch("/api/lore/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_threads: 10 }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail ?? `Lore sync failed (${response.status})`);
+      setToast(`Lore sync: ${result.threads_fetched} threads, ${result.messages_imported} new messages`);
+      setRefreshKey((current) => current + 1);
+    } catch (cause) {
+      setToast(cause instanceof Error ? cause.message : "Could not sync Lore");
+    } finally {
+      setSyncingLore(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -181,8 +201,8 @@ export default function Dashboard() {
 
         <div className="page-content">
           <div className="page-heading">
-            <div><div className="eyebrow">PRIVATE MAILING-LIST WORKSPACE</div><h1>Your contribution queue</h1><p className="heading-subtitle">Patch activity and possible reply tasks from imported mail archives.</p></div>
-            <button className="primary-button heading-action" onClick={() => setModalOpen(true)}><FileUp size={15} /> Import mbox</button>
+            <div><div className="eyebrow">PRIVATE MAILING-LIST WORKSPACE</div><h1>Your contribution queue</h1><p className="heading-subtitle">Patch threads and possible reply tasks from Lore and imported mail.</p></div>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}><button className="secondary-button" onClick={() => void syncLore()} disabled={syncingLore} title="Search Lore for messages sent to or from your configured identities">{syncingLore ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />} {syncingLore ? "Syncing Lore" : "Sync Lore"}</button><button className="primary-button heading-action" onClick={() => setModalOpen(true)}><FileUp size={15} /> Import mbox</button></div>
           </div>
 
           {error && <div role="alert" className="lower-panel" style={{ marginBottom: 18, borderColor: "#e4b7aa", color: "#874d3b" }}>API unavailable: {error}. Start the backend and refresh this dashboard.</div>}
@@ -194,7 +214,7 @@ export default function Dashboard() {
             <article className="metric"><div className="metric-label">Your patch series</div><div className="metric-value">{loading ? "--" : currentStats?.patch_series ?? 0}</div><div className="metric-foot">For the selected email identity</div></article>
           </section>
 
-          <div className="section-head"><h2 className="section-title">Patch series</h2><span className="section-note">Thread grouping and status are not inferred as accepted/applied.</span></div>
+          <div className="section-head"><h2 className="section-title">Patch series</h2><span className="section-note">Lore search and imported archives · status is not inferred as accepted/applied.</span></div>
           <section className="tracker" aria-label="Patch series">
             <div className="tracker-toolbar">
               <div className="tabs" role="tablist" aria-label="Contribution direction">
@@ -218,17 +238,17 @@ export default function Dashboard() {
                       <td>{item.lore_url ? <a className="selected-link" href={item.lore_url} target="_blank" rel="noreferrer" aria-label={`Open lore thread for ${item.subject}`}><ExternalLink size={14} /></a> : <span className="section-note">Unavailable</span>}</td>
                     </tr>;
                   })}
-                  {!loading && filteredContributions.length === 0 && <tr><td colSpan={5}><div className="empty-state">{error ? "Waiting for the API connection." : "No matching patch series in the imported archives."}</div></td></tr>}
+                  {!loading && filteredContributions.length === 0 && <tr><td colSpan={5}><div className="empty-state">{error ? "Waiting for the API connection." : "No matching patch series found on Lore or in imported archives."}</div></td></tr>}
                   {loading && <tr><td colSpan={5}><div className="empty-state"><LoaderCircle size={16} style={{ display: "inline", verticalAlign: "-3px", marginRight: 7 }} />Loading archive data...</div></td></tr>}
                 </tbody>
               </table>
             </div>
-            <div className="table-footer"><span>Showing <strong>{filteredContributions.length}</strong> of <strong>{contributions.length}</strong> series</span><span>Source: imported mbox archives</span></div>
+            <div className="table-footer"><span>Showing <strong>{filteredContributions.length}</strong> of <strong>{contributions.length}</strong> series</span><span>Source: Lore search and imported mbox</span></div>
           </section>
 
           <section className="lower-panel" id="reply-tasks" style={{ marginTop: 20 }}>
             <div className="activity-head"><div><h2 className="section-title">Reply suggestions</h2><div className="section-note" style={{ marginTop: 5 }}>Language-based heuristics. Review the thread before acting.</div></div><span className="tab-count">{openTasks.length} open</span></div>
-            {openTasks.length === 0 ? <div className="selected-empty">No open suggestions. Import more mailbox messages to update this list.</div> : <div style={{ display: "grid", gap: 0, marginTop: 9 }}>
+            {openTasks.length === 0 ? <div className="selected-empty">No open suggestions. Sync Lore or import more mailbox messages to update this list.</div> : <div style={{ display: "grid", gap: 0, marginTop: 9 }}>
               {openTasks.map((task) => <article key={task.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 16, alignItems: "center", padding: "13px 0", borderTop: "1px solid #edf0eb" }}>
                 <div style={{ minWidth: 0 }}><div className="patch-title">{task.subject}</div><div className="patch-meta">From {task.sender} · {task.confidence} confidence · {task.reason}</div><a className="selected-link" href={task.lore_url} target="_blank" rel="noreferrer">Open message <ExternalLink size={12} /></a></div>
                 <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", gap: 7 }}><button className="secondary-button" disabled={busyTaskId === task.id} onClick={() => void updateTask(task.id, "dismissed")}>Dismiss</button><button className="primary-button" disabled={busyTaskId === task.id} onClick={() => void updateTask(task.id, "done")}><Check size={13} /> Done</button></div>

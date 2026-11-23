@@ -1,6 +1,8 @@
 services:
   db:
     image: postgres:16
+    network_mode: host
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
     environment:
       POSTGRES_DB: contribution_hub
       POSTGRES_USER: hub
@@ -14,10 +16,11 @@ services:
       retries: 10
 
   api:
-    build: .
+    build:
+      context: .
+      network: host
+    network_mode: host
     env_file: .env
-    ports:
-      - "127.0.0.1:8000:8000"
     volumes:
       - ./imports:/app/imports
       - ./data:/app/data
@@ -34,12 +37,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      network: host
       args:
-        API_URL: http://api:8000
+        API_URL: http://127.0.0.1:8000
+    network_mode: host
     environment:
-      API_URL: http://api:8000
-    ports:
-      - "127.0.0.1:3000:3000"
+      API_URL: http://127.0.0.1:8000
     depends_on:
       api:
         condition: service_healthy
